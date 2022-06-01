@@ -52,7 +52,7 @@ use sp_session::SessionKeys;
 use sp_transaction_pool::runtime_api::TaggedTransactionQueue;
 use std::sync::Arc;
 use subspace_runtime_primitives::opaque::Block;
-use subspace_runtime_primitives::{AccountId, Balance, Index as Nonce};
+use subspace_runtime_primitives::{AccountId, Balance, Hash, Index as Nonce};
 
 /// Error type for Subspace service.
 #[derive(thiserror::Error, Debug)]
@@ -111,6 +111,15 @@ impl From<Configuration> for SubspaceConfiguration {
     }
 }
 
+pub type ProofVerifier<RuntimeApi, ExecutorDispatch> = subspace_fraud_proof::ProofVerifier<
+    Block,
+    FullClient<RuntimeApi, ExecutorDispatch>,
+    FullBackend,
+    NativeElseWasmExecutor<ExecutorDispatch>,
+    sc_service::SpawnTaskHandle,
+    Hash,
+>;
+
 /// Creates `PartialComponents` for Subspace client.
 #[allow(clippy::type_complexity)]
 pub fn new_partial<RuntimeApi, ExecutorDispatch>(
@@ -125,6 +134,7 @@ pub fn new_partial<RuntimeApi, ExecutorDispatch>(
             Block,
             FullClient<RuntimeApi, ExecutorDispatch>,
             FullClient<RuntimeApi, ExecutorDispatch>,
+            ProofVerifier<RuntimeApi, ExecutorDispatch>,
         >,
         (
             impl BlockImport<
@@ -187,9 +197,9 @@ where
         executor,
         task_manager.spawn_handle(),
     );
-    client
-        .execution_extensions()
-        .set_extensions_factory(Box::new(proof_verifier));
+    // client
+    // .execution_extensions()
+    // .set_extensions_factory(Box::new(proof_verifier));
 
     let telemetry = telemetry.map(|(worker, telemetry)| {
         task_manager
@@ -205,6 +215,7 @@ where
         task_manager.spawn_essential_handle(),
         client.clone(),
         client.clone(),
+        proof_verifier,
     );
 
     let (block_import, subspace_link) = sc_consensus_subspace::block_import(
@@ -277,7 +288,7 @@ where
 }
 
 /// Full node along with some other components.
-pub struct NewFull<C, TxPoolC>
+pub struct NewFull<C, TxPoolC, Verifier>
 where
     C: ProvideRuntimeApi<Block>
         + BlockBackend<Block>
@@ -287,6 +298,7 @@ where
     C::Api: TaggedTransactionQueue<Block>,
     TxPoolC: ProvideRuntimeApi<Block> + Send + Sync + 'static,
     TxPoolC::Api: sp_executor::ExecutorApi<Block, cirrus_primitives::Hash>,
+    Verifier: subspace_fraud_proof::VerifyFraudProof + Send + Sync + 'static,
 {
     /// Task manager.
     pub task_manager: TaskManager,
@@ -313,7 +325,7 @@ where
     /// Network starter.
     pub network_starter: NetworkStarter,
     /// Transaction pool.
-    pub transaction_pool: Arc<FullPool<Block, C, TxPoolC>>,
+    pub transaction_pool: Arc<FullPool<Block, C, TxPoolC, Verifier>>,
 }
 
 /// Builds a new service for a full client.
@@ -321,7 +333,11 @@ pub fn new_full<RuntimeApi, ExecutorDispatch>(
     config: SubspaceConfiguration,
     enable_rpc_extensions: bool,
 ) -> Result<
-    NewFull<FullClient<RuntimeApi, ExecutorDispatch>, FullClient<RuntimeApi, ExecutorDispatch>>,
+    NewFull<
+        FullClient<RuntimeApi, ExecutorDispatch>,
+        FullClient<RuntimeApi, ExecutorDispatch>,
+        ProofVerifier<RuntimeApi, ExecutorDispatch>,
+    >,
     Error,
 >
 where
