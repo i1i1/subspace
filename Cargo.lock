@@ -8213,12 +8213,9 @@ dependencies = [
  "derive_more",
  "frame-support",
  "frame-system-rpc-runtime-api",
- "futures 0.3.21",
  "jsonrpsee",
- "pallet-executor",
  "pallet-transaction-payment-rpc",
  "pallet-transaction-payment-rpc-runtime-api",
- "parity-util-mem",
  "sc-basic-authorship",
  "sc-client-api",
  "sc-consensus",
@@ -8254,7 +8251,6 @@ dependencies = [
  "substrate-frame-rpc-system",
  "substrate-prometheus-endpoint",
  "thiserror",
- "tracing",
 ]
 
 [[package]]
@@ -8363,6 +8359,7 @@ dependencies = [
  "sc-network",
  "sc-service",
  "sc-tracing",
+ "sc-transaction-pool",
  "sp-arithmetic",
  "sp-blockchain",
  "sp-keyring",
@@ -9067,7 +9064,7 @@ checksum = "4ee73e6e4924fe940354b8d4d98cad5231175d615cd855b758adc658c0aac6a0"
 dependencies = [
  "cfg-if",
  "digest 0.10.3",
- "rand 0.4.6",
+ "rand 0.8.5",
  "static_assertions",
 ]
 
