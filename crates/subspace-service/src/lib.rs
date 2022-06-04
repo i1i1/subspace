@@ -191,16 +191,6 @@ where
 
     let client = Arc::new(client);
 
-    let proof_verifier = subspace_fraud_proof::ProofVerifier::new(
-        client.clone(),
-        backend.clone(),
-        executor,
-        task_manager.spawn_handle(),
-    );
-    // client
-    // .execution_extensions()
-    // .set_extensions_factory(Box::new(proof_verifier));
-
     let telemetry = telemetry.map(|(worker, telemetry)| {
         task_manager
             .spawn_handle()
@@ -209,6 +199,13 @@ where
     });
 
     let select_chain = sc_consensus::LongestChain::new(backend.clone());
+
+    let proof_verifier = subspace_fraud_proof::ProofVerifier::new(
+        client.clone(),
+        backend.clone(),
+        executor,
+        task_manager.spawn_handle(),
+    );
 
     let transaction_pool = pool::new_full(
         config,
