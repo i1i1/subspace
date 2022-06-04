@@ -367,27 +367,10 @@ async fn fraud_proof_verification_in_tx_pool_should_work() {
 
 	alice.wait_for_blocks(3).await;
 
-	let transfer = cirrus_test_service::construct_extrinsic(
-		&alice.client,
-		pallet_balances::Call::transfer {
-			dest: cirrus_test_service::runtime::Address::Id(Charlie.public().into()),
-			value: 8,
-		},
-		Alice,
-		false,
-		0,
-	);
-
 	let best_hash = alice.client.info().best_hash;
 	let header = alice.client.header(&BlockId::Hash(best_hash)).unwrap().unwrap();
 	let parent_header =
 		alice.client.header(&BlockId::Hash(*header.parent_hash())).unwrap().unwrap();
-
-	let intermediate_roots = alice
-		.client
-		.runtime_api()
-		.intermediate_roots(&BlockId::Hash(best_hash))
-		.expect("Get intermediate roots");
 
 	let prover = subspace_fraud_proof::ExecutionProver::new(
 		alice.backend.clone(),
