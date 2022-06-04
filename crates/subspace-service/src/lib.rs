@@ -285,22 +285,22 @@ where
 }
 
 /// Full node along with some other components.
-pub struct NewFull<C, TxPoolC, Verifier>
+pub struct NewFull<Client, PoolClient, Verifier>
 where
-    C: ProvideRuntimeApi<Block>
+    Client: ProvideRuntimeApi<Block>
         + BlockBackend<Block>
         + BlockIdTo<Block>
         + HeaderBackend<Block>
         + 'static,
-    C::Api: TaggedTransactionQueue<Block>,
-    TxPoolC: ProvideRuntimeApi<Block> + Send + Sync + 'static,
-    TxPoolC::Api: sp_executor::ExecutorApi<Block, cirrus_primitives::Hash>,
+    Client::Api: TaggedTransactionQueue<Block>,
+    PoolClient: ProvideRuntimeApi<Block> + Send + Sync + 'static,
+    PoolClient::Api: sp_executor::ExecutorApi<Block, cirrus_primitives::Hash>,
     Verifier: subspace_fraud_proof::VerifyFraudProof + Send + Sync + 'static,
 {
     /// Task manager.
     pub task_manager: TaskManager,
     /// Full client.
-    pub client: Arc<C>,
+    pub client: Arc<Client>,
     /// Chain selection rule.
     pub select_chain: FullSelectChain,
     /// Network.
@@ -322,7 +322,7 @@ where
     /// Network starter.
     pub network_starter: NetworkStarter,
     /// Transaction pool.
-    pub transaction_pool: Arc<FullPool<Block, C, TxPoolC, Verifier>>,
+    pub transaction_pool: Arc<FullPool<Block, Client, PoolClient, Verifier>>,
 }
 
 /// Builds a new service for a full client.
