@@ -19,7 +19,6 @@
 mod pool;
 pub mod rpc;
 
-pub use self::pool::FullPool;
 use cirrus_primitives::Hash as SecondaryHash;
 use derive_more::{Deref, DerefMut, Into};
 use frame_system_rpc_runtime_api::AccountNonceApi;
@@ -36,7 +35,10 @@ use sc_consensus_subspace::{
 };
 use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch};
 use sc_service::error::Error as ServiceError;
-use sc_service::{Configuration, NetworkStarter, PartialComponents, SpawnTasksParams, TaskManager};
+use sc_service::{
+    Configuration, NetworkStarter, PartialComponents, SpawnTaskHandle, SpawnTasksParams,
+    TaskManager,
+};
 use sc_telemetry::{Telemetry, TelemetryWorker};
 use sp_api::{ApiExt, ConstructRuntimeApi, Metadata, ProvideRuntimeApi, TransactionFor};
 use sp_block_builder::BlockBuilder;
@@ -89,6 +91,19 @@ pub type FullClient<RuntimeApi, ExecutorDispatch> =
 pub type FullBackend = sc_service::TFullBackend<Block>;
 pub type FullSelectChain = sc_consensus::LongestChain<FullBackend, Block>;
 
+/// A transaction pool for a full node.
+pub type FullPool<Block, PoolClient, Client, Verifier> =
+    pool::BasicPoolWrapper<Block, pool::FullChainApiWrapper<Block, PoolClient, Client, Verifier>>;
+
+pub type FraudProofVerifier<RuntimeApi, ExecutorDispatch> = subspace_fraud_proof::ProofVerifier<
+    Block,
+    FullClient<RuntimeApi, ExecutorDispatch>,
+    FullBackend,
+    NativeElseWasmExecutor<ExecutorDispatch>,
+    SpawnTaskHandle,
+    Hash,
+>;
+
 /// Subspace-specific service configuration.
 #[derive(Debug, Deref, DerefMut, Into)]
 pub struct SubspaceConfiguration {
@@ -111,15 +126,6 @@ impl From<Configuration> for SubspaceConfiguration {
     }
 }
 
-pub type ProofVerifier<RuntimeApi, ExecutorDispatch> = subspace_fraud_proof::ProofVerifier<
-    Block,
-    FullClient<RuntimeApi, ExecutorDispatch>,
-    FullBackend,
-    NativeElseWasmExecutor<ExecutorDispatch>,
-    sc_service::SpawnTaskHandle,
-    Hash,
->;
-
 /// Creates `PartialComponents` for Subspace client.
 #[allow(clippy::type_complexity)]
 pub fn new_partial<RuntimeApi, ExecutorDispatch>(
@@ -134,7 +140,7 @@ pub fn new_partial<RuntimeApi, ExecutorDispatch>(
             Block,
             FullClient<RuntimeApi, ExecutorDispatch>,
             FullClient<RuntimeApi, ExecutorDispatch>,
-            ProofVerifier<RuntimeApi, ExecutorDispatch>,
+            FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
         >,
         (
             impl BlockImport<
@@ -325,18 +331,17 @@ where
     pub transaction_pool: Arc<FullPool<Block, Client, PoolClient, Verifier>>,
 }
 
+type FullNode<RuntimeApi, ExecutorDispatch> = NewFull<
+    FullClient<RuntimeApi, ExecutorDispatch>,
+    FullClient<RuntimeApi, ExecutorDispatch>,
+    FraudProofVerifier<RuntimeApi, ExecutorDispatch>,
+>;
+
 /// Builds a new service for a full client.
 pub fn new_full<RuntimeApi, ExecutorDispatch>(
     config: SubspaceConfiguration,
     enable_rpc_extensions: bool,
-) -> Result<
-    NewFull<
-        FullClient<RuntimeApi, ExecutorDispatch>,
-        FullClient<RuntimeApi, ExecutorDispatch>,
-        ProofVerifier<RuntimeApi, ExecutorDispatch>,
-    >,
-    Error,
->
+) -> Result<FullNode<RuntimeApi, ExecutorDispatch>, Error>
 where
     RuntimeApi: ConstructRuntimeApi<Block, FullClient<RuntimeApi, ExecutorDispatch>>
         + Send

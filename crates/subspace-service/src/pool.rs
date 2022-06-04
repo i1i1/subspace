@@ -32,10 +32,6 @@ pub type ExtrinsicHash<A> = <<A as ChainApi>::Block as BlockT>::Hash;
 /// Extrinsic type for a pool.
 pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as BlockT>::Extrinsic;
 
-/// A transaction pool for a full node.
-pub type FullPool<Block, PoolClient, Client, Verifier> =
-    BasicPoolWrapper<Block, FullChainApiWrapper<Block, PoolClient, Client, Verifier>>;
-
 type BoxedReadyIterator<Hash, Data> =
     Box<dyn ReadyTransactions<Item = Arc<Transaction<Hash, Data>>> + Send>;
 
@@ -43,6 +39,10 @@ type ReadyIteratorFor<PoolApi> = BoxedReadyIterator<ExtrinsicHash<PoolApi>, Extr
 
 type PolledIterator<PoolApi> = Pin<Box<dyn Future<Output = ReadyIteratorFor<PoolApi>> + Send>>;
 
+/// A wrapper for [`sc_transaction_pool::FullChainApi`].
+///
+/// An additional verifier is added to perform an extrinsic pre-validation before calling the runtime api
+/// `validate_transaction`.
 pub struct FullChainApiWrapper<Block, PoolClient, Client, Verifier> {
     inner: FullChainApi<PoolClient, Block>,
     client: Arc<Client>,
@@ -64,7 +64,7 @@ where
     Client::Api: ExecutorApi<Block, cirrus_primitives::Hash>,
     Verifier: VerifyFraudProof + Send + Sync + 'static,
 {
-    pub fn new(
+    fn new(
         pool_client: Arc<PoolClient>,
         client: Arc<Client>,
         prometheus: Option<&PrometheusRegistry>,
@@ -78,7 +78,7 @@ where
         }
     }
 
-    pub fn validate_transaction_blocking(
+    fn validate_transaction_blocking(
         &self,
         at: &BlockId<Block>,
         source: TransactionSource,
@@ -170,6 +170,7 @@ where
     }
 }
 
+/// A wrapper for [`sc_transaction_pool::BasicPool`].
 pub struct BasicPoolWrapper<Block, PoolApi>
 where
     Block: BlockT,
