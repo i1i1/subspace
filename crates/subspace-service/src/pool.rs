@@ -14,7 +14,6 @@ use sc_transaction_pool_api::{
 };
 use sp_api::ProvideRuntimeApi;
 use sp_core::traits::SpawnEssentialNamed;
-use sp_executor::ExecutorApi;
 use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, BlockIdTo, NumberFor};
 use sp_runtime::transaction_validity::TransactionValidity;
@@ -57,7 +56,7 @@ where
         + Send
         + Sync
         + 'static,
-    Client::Api: TaggedTransactionQueue<Block> + ExecutorApi<Block, cirrus_primitives::Hash>,
+    Client::Api: TaggedTransactionQueue<Block>,
 {
     fn new(
         client: Arc<Client>,
@@ -89,7 +88,7 @@ where
         + Send
         + Sync
         + 'static,
-    Client::Api: TaggedTransactionQueue<Block> + ExecutorApi<Block, cirrus_primitives::Hash>,
+    Client::Api: TaggedTransactionQueue<Block>,
 {
     type Block = Block;
     type Error = sc_transaction_pool::error::Error;
@@ -188,7 +187,7 @@ where
         + Send
         + Sync
         + 'static,
-    Client::Api: TaggedTransactionQueue<Block> + ExecutorApi<Block, cirrus_primitives::Hash>,
+    Client::Api: TaggedTransactionQueue<Block>,
 {
     type Block = Block;
     type Hash = ExtrinsicHash<FullChainApiWrapper<Block, Client>>;
@@ -335,7 +334,7 @@ where
         + Send
         + Sync
         + 'static,
-    Client::Api: TaggedTransactionQueue<Block> + ExecutorApi<Block, cirrus_primitives::Hash>,
+    Client::Api: TaggedTransactionQueue<Block>,
 {
     let prometheus = config.prometheus_registry();
     let pool_api = Arc::new(FullChainApiWrapper::new(
