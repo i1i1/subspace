@@ -674,12 +674,21 @@ impl SinglePlotFarm {
         Ok(())
     }
 
+    // TODO: better name for a method
+    /// Gracefully shutdown a farm
+    pub async fn graceful_shutdown(self) {
+        // Ensure that other fields are dropped
+        let get_node_runner = |s: Self| s.node_runner;
+        let mut node_runner = get_node_runner(self);
+        node_runner.run().await
+    }
+
     pub(crate) fn dsn_sync(
         &self,
         max_plot_size: u64,
         total_pieces: u64,
         range_size: PieceIndexHashNumber,
-    ) -> impl Future<Output = anyhow::Result<()>> {
+    ) -> impl Future<Output = anyhow::Result<()>> + 'static {
         let options = SyncOptions {
             range_size,
             public_key: self.public_key,

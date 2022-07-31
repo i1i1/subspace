@@ -21,6 +21,7 @@ use subspace_rpc_primitives::{
 };
 use subspace_verification::is_within_solution_range;
 use thiserror::Error;
+use tokio::task::JoinHandle;
 use tracing::{debug, error, info, info_span, trace, warn, Instrument};
 
 const TAGS_SEARCH_LIMIT: usize = 10;
@@ -42,7 +43,7 @@ pub enum FarmingError {
 /// At high level it receives a new challenge from the consensus and tries to find solution for it
 /// in its `Commitments` database.
 pub struct Farming {
-    handle: Fuse<AbortingJoinHandle<Result<(), FarmingError>>>,
+    handle: Fuse<JoinHandle<Result<(), FarmingError>>>,
 }
 
 /// Assumes `plot`, `commitment`, `client` and `identity` are already initialized
@@ -60,7 +61,7 @@ impl Farming {
         let (initialized_sender, initialized_receiver) = async_oneshot::oneshot();
 
         // Get a handle for the background task, so that we can wait on it later if we want to
-        let farming_handle = tokio::spawn(
+        let handle = tokio::spawn(
             async move {
                 subscribe_to_slot_info(
                     single_plot_farm_id,
@@ -75,14 +76,13 @@ impl Farming {
                 .await
             }
             .in_current_span(),
-        );
+        )
+        .fuse();
 
         // Wait for initialization to finish, result doesn't matter here
         let _ = initialized_receiver.await;
 
-        Farming {
-            handle: AbortingJoinHandle::new(farming_handle).fuse(),
-        }
+        Farming { handle }
     }
 
     /// Waits for the background farming to finish
@@ -91,6 +91,13 @@ impl Farming {
             return Ok(());
         }
         (&mut self.handle).await.map_err(FarmingError::JoinTask)?
+    }
+
+    pub fn graceful_shutdown(self) -> Result<(), FarmingError> {
+        if self.handle.is_terminated() {
+            return Ok(());
+        }
+        Ok(())
     }
 }
 
