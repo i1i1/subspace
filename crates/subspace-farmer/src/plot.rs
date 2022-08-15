@@ -113,7 +113,7 @@ impl fmt::Debug for Plot {
 }
 
 impl Plot {
-    const PIECES_PER_REQUEST: u64 = 1000;
+    const PIECES_PER_REQUEST: u64 = 1100;
 
     /// Creates a new plot for persisting encoded pieces to disk
     pub fn open_or_create(
@@ -166,11 +166,11 @@ impl Plot {
 
         let piece_count = Arc::clone(plot_worker.piece_count());
 
-        let span = Span::current();
+        // let span = Span::current();
         let worker_thread = thread::Builder::new()
             .name(format!("plot-worker-{single_plot_farm_id}"))
             .spawn(move || {
-                let _guard = span.enter();
+                // let _guard = span.enter();
 
                 plot_worker.run(requests_receiver);
             })

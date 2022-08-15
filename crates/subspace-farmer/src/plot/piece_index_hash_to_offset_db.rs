@@ -274,6 +274,7 @@ impl IndexHashToOffsetDB {
         Ok(piece_offset)
     }
 
+    #[tracing::instrument(level = "INFO", skip_all)]
     pub(super) fn get_sequential(
         &self,
         from: PieceIndexHash,

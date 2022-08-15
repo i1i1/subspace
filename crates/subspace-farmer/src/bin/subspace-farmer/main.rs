@@ -243,11 +243,13 @@ struct Command {
 async fn main() -> Result<()> {
     tracing_subscriber::registry()
         .with(
-            fmt::layer().with_span_events(FmtSpan::CLOSE).with_filter(
-                EnvFilter::builder()
-                    .with_default_directive(LevelFilter::INFO.into())
-                    .from_env_lossy(),
-            ),
+            fmt::layer()
+                .with_span_events(FmtSpan::CLOSE | FmtSpan::ENTER)
+                .with_filter(
+                    EnvFilter::builder()
+                        .with_default_directive(LevelFilter::INFO.into())
+                        .from_env_lossy(),
+                ),
         )
         .init();
     utils::raise_fd_limit();

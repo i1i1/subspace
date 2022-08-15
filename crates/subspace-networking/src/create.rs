@@ -117,12 +117,15 @@ impl Config {
             .set_protocol_name(KADEMLIA_PROTOCOL)
             // Ignore any puts
             .set_record_filtering(KademliaStoreInserts::FilterBoth)
+            // .set_max_packet_size(1024 * 1024)
             .set_kbucket_inserts(KademliaBucketInserts::Manual);
 
         let mut yamux_config = YamuxConfig::default();
         // Enable proper flow-control: window updates are only sent when buffered data has been
         // consumed.
         yamux_config.set_window_update_mode(WindowUpdateMode::on_read());
+        // yamux_config.set_max_buffer_size(1024 * 1024 * 20);
+        // yamux_config.set_receive_window_size(1024 * 1024);
 
         let mplex_config = MplexConfig::default();
 
@@ -134,6 +137,7 @@ impl Config {
             .message_id_fn(|message: &GossipsubMessage| {
                 MessageId::from(crypto::sha256_hash(&message.data))
             })
+            // .max_transmit_size(64 * 1024 * 1024) // 2MB
             .max_transmit_size(2 * 1024 * 1024) // 2MB
             .build()
             .expect("Default config for gossipsub is always correct; qed");

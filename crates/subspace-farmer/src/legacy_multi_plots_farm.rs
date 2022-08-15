@@ -101,8 +101,8 @@ impl LegacyMultiPlotsFarm {
                     let listen_on = listen_on.clone();
                     let single_disk_semaphore = single_disk_semaphore.clone();
 
-                    let span = info_span!("single_plot_farm", %plot_index);
-                    let _enter = span.enter();
+                    // let span = info_span!("single_plot_farm", %plot_index);
+                    // let _enter = span.enter();
 
                     SinglePlotFarm::new(SinglePlotFarmOptions {
                         id: plot_index.into(),

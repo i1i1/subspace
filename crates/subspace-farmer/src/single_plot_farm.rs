@@ -44,7 +44,7 @@ use tokio::runtime::Handle;
 use tracing::{error, info, trace, warn, Instrument, Span};
 use ulid::Ulid;
 
-const SYNC_PIECES_AT_ONCE: u64 = 5000;
+const SYNC_PIECES_AT_ONCE: u64 = 1100;
 /// 100 MiB worth of object mappings per plot
 const MAX_OBJECT_MAPPINGS_SIZE: u64 = 100 * 1024 * 1024;
 
@@ -461,9 +461,11 @@ impl SinglePlotFarm {
 
                 // TODO: also ask for how many pieces to read
                 move |&PiecesByRangeRequest { start, end }| {
+                    tracing::info!("Start");
                     let mut pieces_and_indexes = plot
                         .get_sequential_pieces(start, SYNC_PIECES_AT_ONCE)
                         .ok()?;
+                    tracing::info!("Got {}", pieces_and_indexes.len());
 
                     let next_piece_index_hash = if let Some(idx) = pieces_and_indexes
                         .iter()
@@ -479,13 +481,14 @@ impl SinglePlotFarm {
                             .map(|(index, _)| PieceIndexHash::from_index(index))
                     };
 
-                    let (piece_indexes, pieces) = pieces_and_indexes
+                    let (piece_indexes, pieces): (Vec<_>, _) = pieces_and_indexes
                         .into_iter()
                         .flat_map(|(index, mut piece)| {
                             codec.decode(&mut piece, index).ok()?;
                             Some((index, piece))
                         })
                         .unzip();
+                    tracing::info!("Returned {}", piece_indexes.len());
 
                     Some(PiecesByRangeResponse {
                         pieces: PiecesToPlot {

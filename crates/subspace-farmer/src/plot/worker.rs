@@ -334,6 +334,7 @@ impl<T: PlotFile> PlotWorker<T> {
         })
     }
 
+    #[tracing::instrument(level = "INFO", skip_all)]
     fn read_piece_offsets_and_indexes(
         &mut self,
         from: PieceIndexHash,
