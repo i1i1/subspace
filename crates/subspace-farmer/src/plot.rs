@@ -130,9 +130,9 @@ impl Plot {
             .open(plot_directory.join("plot.bin"))
             .map_err(PlotError::PlotOpen)?;
 
-        if let Err(error) = plot.preallocate(max_plot_size) {
-            warn!(%error, %max_plot_size, "Failed to pre-allocate plot file");
-        }
+        // if let Err(error) = plot.preallocate(max_plot_size) {
+        //     warn!(%error, %max_plot_size, "Failed to pre-allocate plot file");
+        // }
         plot.advise_random_access().map_err(PlotError::PlotOpen)?;
 
         Self::with_plot_file(

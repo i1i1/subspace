@@ -7,6 +7,7 @@ use subspace_core_primitives::{
     FlatPieces, PieceIndex, PieceIndexHash, PublicKey, PIECE_SIZE, U256,
 };
 use subspace_networking::libp2p::core::multihash::{Code, MultihashDigest};
+use subspace_networking::libp2p::PeerId;
 use subspace_networking::{PiecesByRangeRequest, PiecesByRangeResponse, PiecesToPlot};
 use tracing::{debug, error, trace, warn};
 
@@ -64,14 +65,14 @@ mod private {
 
 #[derive(Debug, thiserror::Error)]
 pub enum GetPiecesByRangeError {
-    /// Cannot find closest pieces by range.
-    #[error("Cannot find closest pieces by range")]
-    NoClosestPiecesFound,
     /// Cannot get closest peers from DHT.
-    #[error("Cannot get closest peers from DHT")]
+    #[error("Cannot get closest peers from DHT: {0}")]
     CannotGetClosestPeers(#[source] subspace_networking::GetClosestPeersError),
+    /// There is no farmers which support our protocol
+    #[error("There is no farmers which support our protocol")]
+    NoSupportedFarmer,
     /// Node runner was dropped, impossible to get pieces by range.
-    #[error("Node runner was dropped, impossible to get pieces by range")]
+    #[error("Node runner was dropped, impossible to get pieces by range: {0}")]
     NodeRunnerDropped(#[source] subspace_networking::SendRequestError),
 }
 
@@ -114,6 +115,36 @@ impl DSNSync for NoSync {
     }
 }
 
+async fn find_closest_peer(
+    node: &subspace_networking::Node,
+    key: subspace_networking::libp2p::core::multihash::Multihash,
+) -> Result<PeerId, GetPiecesByRangeError> {
+    let mut peer_id = None;
+    let test_request = PiecesByRangeRequest {
+        start: PieceIndexHash::from([0; 32]),
+        end: PieceIndexHash::from([0xff; 32]),
+    };
+
+    'outer: for _ in 0..1 {
+        let peers = node
+            .get_closest_peers(key)
+            .await
+            .map_err(GetPiecesByRangeError::CannotGetClosestPeers)?;
+        tracing::info!("Peers {peers:?}");
+
+        // select first peer for the piece-by-range protocol
+        for id in peers.into_iter().take(5) {
+            if node.send_generic_request(id, test_request).await.is_ok() {
+                peer_id = Some(id);
+                break 'outer;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+
+    peer_id.ok_or(GetPiecesByRangeError::NoSupportedFarmer)
+}
+
 #[async_trait::async_trait]
 impl DSNSync for subspace_networking::Node {
     type Error = GetPiecesByRangeError;
@@ -132,15 +163,7 @@ impl DSNSync for subspace_networking::Node {
 
         // obtain closest peers to the middle of the range
         let key = Code::Identity.digest(&middle);
-        let peers = self
-            .get_closest_peers(key)
-            .await
-            .map_err(GetPiecesByRangeError::CannotGetClosestPeers)?;
-
-        // select first peer for the piece-by-range protocol
-        let peer_id = *peers
-            .first()
-            .ok_or(GetPiecesByRangeError::NoClosestPiecesFound)?;
+        let peer_id = find_closest_peer(self, key).await?;
 
         trace!(%peer_id, ?start, ?end, "Peer found");
 
@@ -223,6 +246,7 @@ where
     DSN: DSNSync + Send + Sized,
     OP: OnSync,
 {
+    tracing::info!("Started sync");
     let SyncOptions {
         max_plot_size,
         total_pieces,
@@ -277,35 +301,48 @@ where
             [Some((sub_sector_start, sub_sector_end)), None]
         }
     })
-    .flatten();
+    .flatten()
+    .collect::<Vec<_>>();
 
-    for (start, end) in sync_ranges {
+    tracing::info!("Started sync");
+    let len = sync_ranges.len();
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+    for (i, (start, end)) in sync_ranges.into_iter().enumerate() {
+        if i % 256 == 0 {
+            tracing::info!(i, len, "Synced 256 more ranges");
+        }
         let mut stream = dsn.get_pieces(start.into()..end.into()).await?;
+        let _sp = tracing::info_span!("Stream");
 
         while let Some(pieces_to_plot) = stream.next().await {
+            let _sp = tracing::info_span!("New pieces");
             let PiecesToPlot {
                 piece_indexes,
                 pieces,
             } = pieces_to_plot;
 
             // Filter out pieces which are not in our range
-            let (piece_indexes, pieces) = piece_indexes
-                .into_iter()
-                .zip(pieces.as_pieces())
-                .filter(|(index, _)| {
-                    (start..end).contains(&PieceIndexHashNumber::from(PieceIndexHash::from_index(
-                        *index,
-                    )))
-                })
-                .map(|(index, piece)| {
-                    (
-                        index,
-                        piece
-                            .try_into()
-                            .expect("`as_pieces` always returns a piece"),
-                    )
-                })
-                .unzip();
+            let (piece_indexes, pieces) = {
+                let _sp = tracing::info_span!("Filtering pieces");
+                piece_indexes
+                    .into_iter()
+                    .zip(pieces.as_pieces())
+                    .filter(|(index, _)| {
+                        (start..end).contains(&PieceIndexHashNumber::from(
+                            PieceIndexHash::from_index(*index),
+                        ))
+                    })
+                    .map(|(index, piece)| {
+                        (
+                            index,
+                            piece
+                                .try_into()
+                                .expect("`as_pieces` always returns a piece"),
+                        )
+                    })
+                    .unzip()
+            };
 
             if let Err(err) = on_sync.on_pieces(pieces, piece_indexes).await {
                 error!(%err, "DSN sync process returned an error");

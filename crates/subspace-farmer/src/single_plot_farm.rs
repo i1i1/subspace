@@ -579,12 +579,15 @@ impl SinglePlotFarm {
             }));
         }
 
+        tracing::info!("Didn't Started sync");
         // Start DSN syncing
         if enable_dsn_sync {
+            std::thread::sleep(std::time::Duration::from_secs(1));
             // TODO: operate with number of pieces to fetch, instead of range calculations
             let sync_range_size = (PieceIndexHashNumber::MAX / farmer_protocol_info.total_pieces)
-                .saturating_mul(&1024u32.into()); // 4M per stream
+                .saturating_mul(&(4 / 4 * 1024u32).into()); // 32M per stream
 
+            tracing::info!("Started sync");
             let dsn_sync_fut = farm.dsn_sync(
                 verification_client,
                 farmer_protocol_info,
@@ -595,9 +598,7 @@ impl SinglePlotFarm {
 
             farm.tasks.push(Box::pin(async move {
                 trace!("Started waiting for connected peers.");
-                let wait_result = dsn_sync_node.wait_for_connected_peers().await;
-
-                match wait_result {
+                match dsn_sync_node.wait_for_connected_peers().await {
                     Ok(_) => {
                         trace!("Waiting for connected peers succeeded.");
                     }
@@ -605,6 +606,8 @@ impl SinglePlotFarm {
                         error!(?error, "Waiting for connected peers failed.");
                     }
                 };
+
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
 
                 match dsn_sync_fut.await {
                     Ok(()) => {
@@ -712,12 +715,14 @@ impl SinglePlotFarm {
         range_size: PieceIndexHashNumber,
         pieces_verification_enabled: bool,
     ) -> impl Future<Output = anyhow::Result<()>> {
+        tracing::info!("Started sync");
         let options = SyncOptions {
             range_size,
             public_key: self.public_key,
             max_plot_size: farmer_protocol_info.max_plot_size,
             total_pieces: farmer_protocol_info.total_pieces,
         };
+        tracing::info!("Started sync");
 
         let plotter = VerifyingPlotter {
             single_plot_plotter: self.plotter(),
@@ -849,6 +854,8 @@ impl<RC: RpcClient> OnSync for VerifyingPlotter<RC> {
         }
 
         let plotter = self.single_plot_plotter.clone();
+        tracing::info!(npieces = plotter.plot.piece_count());
+
         let (farm_creation_start_sender, farm_creation_start_receiver) =
             std::sync::mpsc::sync_channel(1);
         // Makes sure background blocking task below is finished before this function's future is
